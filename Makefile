@@ -1,7 +1,7 @@
 CONFIG_MODULE_SIG=n
 
 ifneq ($(KERNELRELEASE),)
-    obj-m := fnrootkit.o
+	obj-m := fnrootkit.o
 else
 	CFLAGS := -Wall
 	CC := gcc $(CFLAGS)
