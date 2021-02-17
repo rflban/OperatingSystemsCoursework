@@ -18,9 +18,4 @@ is_invisible_task_struct(struct task_struct *task);
 void
 toggle_invisability(struct task_struct *task);
 
-asmlinkage long
-hacked_proc_getdents(const struct pt_regs *pt_regs);
-asmlinkage long
-hacked_proc_getdents64(const struct pt_regs *pt_regs);
-
 #endif // OSCW_PROC_H_

