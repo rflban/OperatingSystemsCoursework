@@ -3,7 +3,7 @@ ldflags-y += -T$(src)/3rd_party/khook/engine.lds
 
 ifneq ($(KERNELRELEASE),)
 	obj-m := fnrootkit.o
-	fnrootkit-objs := ./src/proc.o ./src/fnrootkit.o
+	fnrootkit-objs := ./src/net.o ./src/proc.o ./src/fnrootkit.o
 else
 	CFLAGS += -Wall
 	CC := gcc $(CFLAGS)

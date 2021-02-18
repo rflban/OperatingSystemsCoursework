@@ -4,8 +4,8 @@
 #include <linux/syscalls.h>
 
 enum {
-    SIGINVIS = 10,
-    SIGMODHIDE = 12
+    SIGINVISPROC = 10,
+    SIGINVISPORT = 12
 };
 
 struct linux_dirent {
