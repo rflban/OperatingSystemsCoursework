@@ -5,8 +5,8 @@
 #include <linux/signal.h>
 
 enum {
-    SIGINVISPROC = SIGUSR1, // 30
-    SIGINVISPORT = SIGUSR2, // 31
+    SIGINVISPROC = SIGUSR1, // 10
+    SIGINVISPORT = SIGUSR2, // 12
     SIGMODHIDE   = SIGRTMIN // 32
 };
 
